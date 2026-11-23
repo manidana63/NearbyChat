@@ -1,0 +1,40 @@
+name: Build APK from zip
+on:
+  push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          ZIP=$(find . -maxdepth 1 -name '*.zip' | head -n1)
+          if [ -z "$ZIP" ]; then echo "No zip file found in repo root"; exit 1; fi
+          mkdir -p "$GITHUB_WORKSPACE/_proj"
+          unzip -q "$ZIP" -d "$GITHUB_WORKSPACE/_proj"
+          SETTINGS=$(find "$GITHUB_WORKSPACE/_proj" -maxdepth 3 -name 'settings.gradle*' | head -n1)
+          if [ -z "$SETTINGS" ]; then echo "No settings.gradle found inside zip"; exit 1; fi
+          echo "PROJ_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJ_DIR }}
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NearbyChat-apk
+          path: ${{ env.PROJ_DIR }}/app/build/outputs/apk/debug/*.apk
